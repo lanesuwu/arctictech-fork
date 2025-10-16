@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/preview.png" alt="Preview" width="600">
+  <img src="assets/preview.png" alt="Preview" width="1200">
 </p>
 
 # arctictech-csgo (improved fork)
