@@ -22,7 +22,10 @@ void CAntiAim::FakeLag() {
 		return;
 	}
 
-	if (Exploits->GetExploitType() == CExploits::E_DoubleTap && ctx.tickbase_shift && ctx.cmd->buttons & IN_USE && !ctx.planting_bomb)
+	// FIXED: added hideshots to early return check. this should fix where fakelag was still being applied
+	auto exploit_type = Exploits->GetExploitType();
+	if ((exploit_type == CExploits::E_DoubleTap || exploit_type == CExploits::E_HideShots) &&
+		ctx.tickbase_shift && ctx.cmd->buttons & IN_USE && !ctx.planting_bomb)
 		return;
 
 	fakelag = 0;
@@ -31,13 +34,18 @@ void CAntiAim::FakeLag() {
 	if (ctx.tickbase_shift > 0)
 		fakelag_limit = max((cvars.sv_maxusrcmdprocessticks->GetInt() - 1) - ctx.tickbase_shift, 1);
 
-	if (config.ragebot.aimbot.doubletap->get() && (GlobalVars->realtime - ctx.last_shot_time) < 0.2f)
-		fakelag_limit = 2;
+	
+	if (exploit_type == CExploits::E_DoubleTap && (GlobalVars->realtime - ctx.last_shot_time) < 0.2f)
+		fakelag_limit = min(fakelag_limit, 2);
+	else if (exploit_type == CExploits::E_HideShots && ctx.tickbase_shift > 0)
+		fakelag_limit = min(fakelag_limit, 1); // minimal choke when hideshots is charged
+	
 
 	if (config.antiaim.fakelag.enabled->get()) {
-		if (Cheat.LocalPlayer->m_vecVelocity().LengthSqr() < 4096.f) {
+		if (Cheat.LocalPlayer->m_vecVelocity().LengthSqr() < 256.f) { // lowered velocity threshold so fakelag applies with small velocity
 			fakelag = 1;
-		} else {
+		}
+		else {
 			fakelag = fakelag_limit;
 
 			if (Cheat.LocalPlayer->m_fFlags() & FL_ONGROUND && config.antiaim.fakelag.variability->get() > 0)
@@ -57,7 +65,7 @@ void CAntiAim::FakeLag() {
 	}
 
 	fakelag = std::clamp(fakelag, 0, fakelag_limit);
-	
+
 	ctx.send_packet = ClientState->m_nChokedCommands >= fakelag;
 
 	static bool hasPeeked = false;
