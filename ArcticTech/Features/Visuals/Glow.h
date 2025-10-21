@@ -1,6 +1,9 @@
 #pragma once
+#include <vector>
 
+namespace glow {
+    void draw();
+    void restore();
 
-namespace Glow {
-	void Run();
+    extern std::vector<GlowObjectDefinition_t> m_glObjectDefinitions;
 }

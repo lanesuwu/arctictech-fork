@@ -150,11 +150,9 @@ void CResolver::SetupLayer(LagRecord* record, int idx, float delta) {
 
     QAngle angles = record->player->m_angEyeAngles();
 
-    // apply delta to foot yaw and normalize
     float newFootYaw = Math::AngleNormalize(angles.yaw + delta);
     animstate->flFootYaw = newFootYaw;
 
-    // compute move yaw from velocity safely
     Vector vel = record->player->m_vecVelocity();
     float flRawYawIdeal = 0.f;
     if (vel.Length2DSqr() > 1e-6f) {
@@ -162,37 +160,38 @@ void CResolver::SetupLayer(LagRecord* record, int idx, float delta) {
         if (flRawYawIdeal < 0.0f) flRawYawIdeal += 360.0f;
     }
     else {
-        // fallback to eye yaw if practically stationary
         flRawYawIdeal = Math::AngleNormalize(angles.yaw);
     }
 
     animstate->flMoveYaw = Math::AngleNormalize(ValveAngleDiff(flRawYawIdeal, animstate->flFootYaw));
 
-    // if we have previous record's animlayers, copy to provide stable base before update
     if (record->prev_record && record->prev_record->animlayers)
         memcpy(record->player->GetAnimlayers(), record->prev_record->animlayers, sizeof(AnimationLayer) * 13);
 
-    // force animstate update with bounds checks
     animstate->ForceUpdate();
     animstate->Update(angles);
 
-    // compute a stability delta for this resolver layer:
-    // difference of movement playback rate and difference of foot yaw change between stored animstate and current animstate
+    // IMPROVED STABILITY CALCULATION - use synced flPrimaryCycle
     float playback_diff = 0.0f;
-    float storedPlayback = 0.0f;
-    float curPlayback = 0.0f;
-    // guard indexing (not sure if this is good idea)
-    if (record->animlayers)
-        storedPlayback = record->animlayers[ANIMATION_LAYER_MOVEMENT_MOVE].m_flPlaybackRate;
-    if (record->player->GetAnimlayers())
-        curPlayback = record->player->GetAnimlayers()[ANIMATION_LAYER_MOVEMENT_MOVE].m_flPlaybackRate;
-    playback_diff = std::fabs(storedPlayback - curPlayback);
+    float cycle_diff = 0.0f;
+    
+    if (record->animlayers && record->player->GetAnimlayers()) {
+        float storedPlayback = record->animlayers[ANIMATION_LAYER_MOVEMENT_MOVE].m_flPlaybackRate;
+        float curPlayback = record->player->GetAnimlayers()[ANIMATION_LAYER_MOVEMENT_MOVE].m_flPlaybackRate;
+        playback_diff = std::fabs(storedPlayback - curPlayback);
+        
+        // Use the synced flPrimaryCycle for better accuracy
+        float storedCycle = record->prev_record ? animstate->flPrimaryCycle : 0.f;
+        float curCycle = record->player->GetAnimlayers()[ANIMATION_LAYER_MOVEMENT_MOVE].m_flCycle;
+        cycle_diff = std::fabs(curCycle - storedCycle);
+    }
 
     ResolverLayer_t* resolver_layer = &record->resolver_data.layers[idx];
     resolver_layer->desync = delta;
-    resolver_layer->delta = playback_diff * 1000.0f + std::fabs(Math::AngleDiff(animstate->flFootYaw, newFootYaw)) * 10.0f;
+    // Weight both playback rate and cycle differences
+    resolver_layer->delta = playback_diff * 1000.0f + cycle_diff * 500.0f + 
+                           std::fabs(Math::AngleDiff(animstate->flFootYaw, newFootYaw)) * 10.0f;
 
-    // restore the original unupdated animstate for use elsewhere
     CCSGOPlayerAnimationState* original = AnimationSystem->GetUnupdatedAnimstate(record->player->EntIndex());
     if (original)
         *animstate = *original;
@@ -269,7 +268,7 @@ void CResolver::Apply(LagRecord* record) {
         return;
 
     float body_yaw = record->resolver_data.max_desync_delta * record->resolver_data.side;
-    state->flFootYaw = Math::AngleNormalize(state->flEyeYaw + body_yaw);
+    state->flMoveYaw = state->flFootYaw;
 }
 
 void CResolver::Run(CBasePlayer* player, LagRecord* record, std::deque<LagRecord>& records) {

@@ -165,7 +165,8 @@ void CLagCompensation::OnNetUpdate() {
 			}
 		}
 
-		while (records.size() > (pl->IsTeammate() ? 4 : (TIME_TO_TICKS(0.4f) + 13))) // super puper proper lagcomp
+		const auto tick_rate = TIME_TO_TICKS(1);
+		while (records.size() > tick_rate)
 			records.pop_front();
 
 		INetChannelInfo* nci = EngineClient->GetNetChannelInfo();

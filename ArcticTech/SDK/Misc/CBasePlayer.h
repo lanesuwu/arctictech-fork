@@ -166,6 +166,7 @@ enum animstate_layer_t
     ANIMATION_LAYER_COUNT,
 };
 
+
 enum PoseParam_t {
     STRAFE_YAW,
     STAND,
@@ -458,6 +459,10 @@ public:
     void StudioFrameAdvance()
     {
         CallVFunction<void(__thiscall*)(CBasePlayer*)>(this, 220)(this);
+    }
+
+    int GetSequenceActivity(int sequence) {
+        return CallVFunction<int(__thiscall*)(CBasePlayer*, int)>(this, 221)(this, sequence);
     }
 
     void PreThink()
